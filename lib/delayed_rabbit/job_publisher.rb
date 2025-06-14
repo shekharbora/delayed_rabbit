@@ -3,6 +3,23 @@ require "json"
 
 module DelayedRabbit
   class JobPublisher
+    def self.deep_symbolize_keys(hash)
+      hash.transform_keys(&:to_sym).transform_values do |value|
+        case value
+        when Hash
+          deep_symbolize_keys(value)
+        when Array
+          value.map { |v| v.is_a?(Hash) ? deep_symbolize_keys(v) : v }
+        else
+          value
+        end
+      end
+    end
+  end
+end
+
+module DelayedRabbit
+  class JobPublisher
     DEFAULT_EXCHANGE_NAME = "delayed_jobs"
     DEFAULT_EXCHANGE_TYPE = "x-delayed-message"
     DEFAULT_DELAYED_QUEUE_NAME = "delayed_jobs_queue"
@@ -10,10 +27,9 @@ module DelayedRabbit
 
     attr_reader :connection, :channel, :exchange
 
-    def initialize(connection_options = {}, exchange_options = {}, queue_options = {})
-      @connection = Bunny.new(connection_options)
-      @connection.start
-      @channel = @connection.create_channel
+    def initialize(connection_options = {}, exchange_options = {}, queue_options = {}, connection: nil, channel: nil)
+      @connection = connection || Bunny.new(connection_options)
+      @channel = channel || @connection.create_channel
       
       # Configure exchange
       @exchange_options = {
@@ -43,16 +59,22 @@ module DelayedRabbit
       message = {
         job_data: job_data,
         timestamp: Time.now.to_i
-      }.to_json
+      }
 
+      puts "Publishing message: #{message.inspect}"
+      puts "Job data: #{job_data.inspect}"
+
+      puts '=====================================>'
       @exchange.publish(
-        message,
+        message.to_json,
         headers: {"x-delay" => delay_ms},
         routing_key: routing_key,
         persistent: true
       )
-      
-      message
+      # Return the original job_data hash
+      puts "Returning: #{job_data.inspect}"
+      message[:job_data] = message[:job_data].deep_symbolize_keys
+      message[:job_data]
     end
 
     def close
