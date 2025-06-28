@@ -51,36 +51,122 @@ Or install it yourself as:
 gem install delayed_rabbit
 ```
 
-## Usage
+## Rails Integration
 
-### Basic Usage
+### 1. Install the Gem
+
+Add to your Gemfile:
+
+```ruby
+gem 'delayed_rabbit'
+```
+
+### 2. Run the Installer
+
+Run the generator to set up configuration files:
+
+```bash
+rails generate delayed_rabbit:install
+```
+
+This will create:
+- `config/initializers/delayed_rabbit.rb` - Main configuration file
+- `config/rabbitmq.yml` - Environment-specific RabbitMQ settings
+
+### 3. Configure RabbitMQ
+
+Edit `config/rabbitmq.yml` with your RabbitMQ settings:
+
+```yaml
+development:
+  host: localhost
+  port: 5672
+  user: guest
+  password: guest
+  vhost: /
+
+production:
+  host: <%= ENV['RABBITMQ_HOST'] %>
+  port: <%= ENV['RABBITMQ_PORT'] || 5672 %>
+  user: <%= ENV['RABBITMQ_USER'] %>
+  password: <%= ENV['RABBITMQ_PASSWORD'] %>
+  vhost: <%= ENV['RABBITMQ_VHOST'] || '/' %>
+```
+
+### 4. Use in Your Application
+
+#### In Models/Services
+
+```ruby
+class UserNotifier
+  def self.send_welcome_notification(user)
+    DelayedRabbit::JobPublisher.publish(
+      {
+        type: "welcome_email",
+        user_id: user.id,
+        email: user.email
+      },
+      delay_ms: 5000,  # 5 seconds delay
+      routing_key: "notifications.welcome"
+    )
+  end
+end
+```
+
+#### In Controllers
+
+```ruby
+class UsersController < ApplicationController
+  def create
+    user = User.create(user_params)
+    UserNotifier.send_welcome_notification(user)
+    redirect_to root_path, notice: 'User created successfully'
+  end
+end
+```
+
+#### Using Rake Tasks
+
+The gem provides a rake task for testing:
+
+```bash
+# Enqueue a test job with 5 second delay
+bundle exec rake delayed_rabbit:enqueue_test_job[5000]
+
+# Enqueue a notification job
+bundle exec rake jobs:enqueue_notification[5000,123]
+```
+
+## Usage (Non-Rails)
+
+If you're not using Rails:
 
 ```ruby
 require 'delayed_rabbit'
 
-# Create a publisher with custom connection options
-publisher = DelayedRabbit::JobPublisher.new(
-  connection_options: {
+# Configure manually
+DelayedRabbit.configure do |config|
+  config.connection_options = {
     host: "localhost",
     port: 5672,
     user: "guest",
-    password: "guest",
-    vhost: "/"
+    password: "guest"
   }
+end
+
+# Create a publisher
+publisher = DelayedRabbit::JobPublisher.new
+
+# Publish a job
+publisher.publish(
+  {
+    type: "email_notification",
+    recipient: "user@example.com"
+  },
+  delay_ms: 5000
 )
 
-# Publish a job with 5000ms (5 seconds) delay
-job_data = {
-  type: "email_notification",
-  recipient: "user@example.com",
-  subject: "Delayed Email",
-  body: "This email was sent after a delay"
-}
-
-# Publish with custom routing key
-publisher.publish(job_data, delay_ms: 5000, routing_key: "notifications.email")
-
-# Close the connection when done
+# Close connection
 publisher.close
 ```
 

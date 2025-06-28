@@ -1,0 +1,44 @@
+development:
+  host: localhost
+  port: 5672
+  user: guest
+  password: guest
+  vhost: /
+  exchange_type: x-delayed-message
+
+  # Optional settings
+  automatic_recovery: true
+  network_recovery_interval: 10
+
+  # Queue settings
+  message_ttl: 3600000  # 1 hour TTL
+
+test:
+  host: localhost
+  port: 5672
+  user: guest
+  password: guest
+  vhost: /
+  exchange_type: x-delayed-message
+
+  # Optional settings
+  automatic_recovery: false
+  network_recovery_interval: 10
+
+  # Queue settings
+  message_ttl: 3600000  # 1 hour TTL
+
+production:
+  host: <%= ENV['RABBITMQ_HOST'] %>
+  port: <%= ENV['RABBITMQ_PORT'] || 5672 %>
+  user: <%= ENV['RABBITMQ_USER'] %>
+  password: <%= ENV['RABBITMQ_PASSWORD'] %>
+  vhost: <%= ENV['RABBITMQ_VHOST'] || '/' %>
+  exchange_type: x-delayed-message
+
+  # Optional settings
+  automatic_recovery: true
+  network_recovery_interval: 10
+
+  # Queue settings
+  message_ttl: 3600000  # 1 hour TTL
