@@ -294,27 +294,6 @@ bundle exec rake test
 bundle exec irb -Ilib -rdelayed_rabbit
 ```
 
-### Running Tests
-
-The test suite requires a running RabbitMQ instance with the delayed message plugin enabled. You can run tests with:
-
-```bash
-bundle exec rake test
-```
-
-### Releasing a New Version
-
-1. Update the version number in `lib/delayed_rabbit/version.rb`
-2. Run the release command:
-```bash
-bundle exec rake release
-```
-
-This will:
-- Create a git tag for the version
-- Push git commits and tags
-- Push the `.gem` file to rubygems.org
-
 ## Contributing
 
 1. Fork the repository
