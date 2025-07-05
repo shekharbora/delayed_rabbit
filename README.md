@@ -273,25 +273,6 @@ end
 - `auto_delete`: If true, queue will be deleted when last consumer disconnects
 - `arguments`: Additional queue arguments (e.g., TTL, dead-letter exchange)
 
-## Development
-
-### Setting Up Development Environment
-
-1. Clone the repository
-2. Install dependencies:
-```bash
-gem install bundler
-bundle install
-```
-
-3. Run the test suite:
-```bash
-bundle exec rake test
-```
-
-4. Start the development console:
-```bash
-bundle exec irb -Ilib -rdelayed_rabbit
 ```
 
 ## Contributing
