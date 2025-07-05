@@ -273,8 +273,6 @@ end
 - `auto_delete`: If true, queue will be deleted when last consumer disconnects
 - `arguments`: Additional queue arguments (e.g., TTL, dead-letter exchange)
 
-```
-
 ## Contributing
 
 1. Fork the repository
