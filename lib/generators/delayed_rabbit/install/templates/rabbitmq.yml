@@ -10,8 +10,8 @@ development:
   automatic_recovery: true
   network_recovery_interval: 10
 
-  # Queue settings
-  message_ttl: 3600000  # 1 hour TTL
+  # Queue settings (expired messages go to the dead-letter queue)
+  # message_ttl: 3600000  # 1 hour TTL
 
 test:
   host: localhost
@@ -25,8 +25,8 @@ test:
   automatic_recovery: false
   network_recovery_interval: 10
 
-  # Queue settings
-  message_ttl: 3600000  # 1 hour TTL
+  # Queue settings (expired messages go to the dead-letter queue)
+  # message_ttl: 3600000  # 1 hour TTL
 
 production:
   host: <%= ENV['RABBITMQ_HOST'] %>
@@ -40,5 +40,5 @@ production:
   automatic_recovery: true
   network_recovery_interval: 10
 
-  # Queue settings
-  message_ttl: 3600000  # 1 hour TTL
+  # Queue settings (expired messages go to the dead-letter queue)
+  # message_ttl: 3600000  # 1 hour TTL

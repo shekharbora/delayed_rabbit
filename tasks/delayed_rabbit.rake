@@ -1,10 +1,10 @@
 require "delayed_rabbit"
 
 namespace :delayed_rabbit do
-  desc "Enqueue a test job with delay"
+  desc "Enqueue a test job with delay (default 5000ms)"
   task :enqueue_test_job, [:delay_ms] => :environment do |t, args|
-    delay_ms = args[:delay_ms].to_i || 5000 # Default to 5 seconds
-    
+    delay_ms = Integer(args[:delay_ms] || 5000)
+
     job_data = {
       type: "test_job",
       timestamp: Time.now.to_i,

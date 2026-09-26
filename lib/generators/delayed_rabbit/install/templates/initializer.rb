@@ -1,30 +1,20 @@
-# Configure Delayed Rabbit
+# Connection settings are read from config/rabbitmq.yml for the current
+# environment. Anything set here overrides that file.
 DelayedRabbit.configure do |config|
-  # Connection settings
-  config.connection_options = {
-    host: ENV['RABBITMQ_HOST'] || "localhost",
-    port: ENV['RABBITMQ_PORT'] || 5672,
-    user: ENV['RABBITMQ_USER'] || "guest",
-    password: ENV['RABBITMQ_PASSWORD'] || "guest",
-    vhost: ENV['RABBITMQ_VHOST'] || "/",
-    automatic_recovery: true,
-    network_recovery_interval: 10
-  }
+  # Exchange and queue names
+  # config.exchange_name = "delayed_jobs"
+  # config.queue_name = "delayed_jobs_queue"
+  # config.routing_key = "delayed_jobs"
 
-  # Exchange settings
-  config.exchange_options = {
-    type: "x-delayed-message",
-    durable: true,
-    arguments: {"x-delayed-type" => "topic"}
-  }
+  # Rejected or expired messages go to this exchange/queue (nil disables it)
+  # config.dead_letter_exchange_name = "delayed_jobs.dlx"
+  # config.dead_letter_queue_name = "delayed_jobs.dead"
 
-  # Queue settings
-  config.queue_options = {
-    durable: true,
-    arguments: {
-      "x-dead-letter-exchange" => "delayed_jobs",
-      "x-dead-letter-routing-key" => "delayed_jobs",
-      "x-message-ttl" => 3600000  # 1 hour TTL
-    }
-  }
+  # Extra queue arguments are merged into the defaults. Changing arguments of a
+  # queue that already exists makes RabbitMQ reject the declaration
+  # (PRECONDITION_FAILED); delete the queue first.
+  # config.queue_options = {
+  #   durable: true,
+  #   arguments: {"x-message-ttl" => 3_600_000}
+  # }
 end

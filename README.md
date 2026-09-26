@@ -14,6 +14,9 @@ A lightweight Ruby gem for scheduling delayed background jobs using RabbitMQ's d
 - Support for custom routing keys
 - Dead-letter queue support
 
+> delayed_rabbit only **publishes** jobs. Consume `delayed_jobs_queue` with your own
+> worker (e.g. Bunny, Sneakers or a service in another language).
+
 ## Requirements
 
 - Ruby 3.2+
@@ -93,6 +96,9 @@ production:
   vhost: <%= ENV['RABBITMQ_VHOST'] || '/' %>
 ```
 
+Settings from `rabbitmq.yml` are loaded before the app's initializers run, so anything set in
+`config/initializers/delayed_rabbit.rb` overrides them. If the file is missing, the defaults are used.
+
 ### 4. Use in Your Application
 
 #### In Models/Services
@@ -100,7 +106,7 @@ production:
 ```ruby
 class UserNotifier
   def self.send_welcome_notification(user)
-    DelayedRabbit::JobPublisher.publish(
+    DelayedRabbit.publish(
       {
         type: "welcome_email",
         user_id: user.id,
@@ -112,6 +118,10 @@ class UserNotifier
   end
 end
 ```
+
+`DelayedRabbit.publish` reuses one shared connection (guarded by a mutex) across calls.
+`DelayedRabbit::JobPublisher.publish` takes the same arguments but opens and closes a
+connection for each message.
 
 #### In Controllers
 
@@ -130,11 +140,9 @@ end
 The gem provides a rake task for testing:
 
 ```bash
-# Enqueue a test job with 5 second delay
-bundle exec rake delayed_rabbit:enqueue_test_job[5000]
-
-# Enqueue a notification job
-bundle exec rake jobs:enqueue_notification[5000,123]
+# Enqueue a test job (delay defaults to 5000ms)
+bundle exec rake delayed_rabbit:enqueue_test_job
+bundle exec rake delayed_rabbit:enqueue_test_job[10000]
 ```
 
 ## Usage (Non-Rails)
@@ -154,7 +162,7 @@ DelayedRabbit.configure do |config|
   }
 end
 
-# Create a publisher
+# Create a publisher (uses DelayedRabbit.configuration)
 publisher = DelayedRabbit::JobPublisher.new
 
 # Publish a job
@@ -185,7 +193,7 @@ You can also create your own rake tasks for specific job types:
 namespace :jobs do
   desc "Enqueue a notification job"
   task :enqueue_notification, [:delay_ms, :user_id] => :environment do |t, args|
-    delay_ms = args[:delay_ms].to_i || 5000
+    delay_ms = Integer(args[:delay_ms] || 5000)
     user_id = args[:user_id]
     
     job_data = {
@@ -201,14 +209,30 @@ end
 
 ### Advanced Usage
 
+Options passed to `JobPublisher.new` are merged over `DelayedRabbit.configuration`. The
+`arguments` hashes are merged key by key, so you only need to pass the arguments you add.
+To reuse an existing Bunny session, pass `connection:`; the publisher then won't close it.
+
+#### Custom Names and Dead-Lettering
+
+```ruby
+DelayedRabbit.configure do |config|
+  config.exchange_name = "delayed_jobs"
+  config.queue_name = "delayed_jobs_queue"
+  config.routing_key = "delayed_jobs"
+
+  # Rejected or expired messages are routed to this fanout exchange and queue.
+  # Set dead_letter_exchange_name to nil to disable.
+  config.dead_letter_exchange_name = "delayed_jobs.dlx"
+  config.dead_letter_queue_name = "delayed_jobs.dead"
+end
+```
+
 #### Custom Exchange Configuration
 
 ```ruby
 publisher = DelayedRabbit::JobPublisher.new(
   exchange_options: {
-    type: "x-delayed-message",
-    durable: true,
-    auto_delete: false,
     arguments: {"x-delayed-type" => "direct"}  # Change to direct exchange
   }
 )
@@ -219,17 +243,14 @@ publisher = DelayedRabbit::JobPublisher.new(
 ```ruby
 publisher = DelayedRabbit::JobPublisher.new(
   queue_options: {
-    durable: true,
-    exclusive: false,
-    auto_delete: false,
-    arguments: {
-      "x-dead-letter-exchange" => "dlx_exchange",
-      "x-dead-letter-routing-key" => "dlx_key",
-      "x-message-ttl" => 3600000  # 1 hour TTL
-    }
+    arguments: {"x-message-ttl" => 3600000}  # 1 hour TTL, then dead-lettered
   }
 )
 ```
+
+RabbitMQ rejects a declaration whose options differ from an existing exchange or queue
+(`PRECONDITION_FAILED`). After changing queue arguments, delete the queue so it can be
+declared again.
 
 #### Using with Rails Environment
 
@@ -296,10 +317,17 @@ bundle exec irb -Ilib -rdelayed_rabbit
 
 ### Running Tests
 
-The test suite requires a running RabbitMQ instance with the delayed message plugin enabled. You can run tests with:
+The unit tests use mocks and need no broker:
 
 ```bash
 bundle exec rake test
+```
+
+The integration test publishes a delayed message to a real broker that has the delayed
+message plugin enabled:
+
+```bash
+RABBITMQ_INTEGRATION=1 bundle exec rake test
 ```
 
 ### Releasing a New Version
@@ -327,16 +355,21 @@ This will:
 
 ### Common Issues
 
-1. **Plugin Not Enabled**
+1. **Plugin Not Enabled** (`PRECONDITION_FAILED - invalid exchange type 'x-delayed-message'`)
    - Ensure the delayed message plugin is enabled in RabbitMQ
    - Run: `rabbitmq-plugins enable rabbitmq_delayed_message_exchange`
 
-2. **Connection Issues**
+2. **`PRECONDITION_FAILED - inequivalent arg ...`**
+   - An exchange or queue with the same name already exists with different settings
+     (versions before 1.1.0 declared `delayed_jobs` as a plain `topic` exchange)
+   - Delete it, e.g. `rabbitmqctl delete_exchange delayed_jobs` / `rabbitmqctl delete_queue delayed_jobs_queue`
+
+3. **Connection Issues**
    - Verify RabbitMQ server is running
    - Check connection credentials
    - Verify network connectivity
 
-3. **Message Not Received**
+4. **Message Not Received**
    - Check if exchange exists
    - Verify queue bindings
    - Check message TTL settings

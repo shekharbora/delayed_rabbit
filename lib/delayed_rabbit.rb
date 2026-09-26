@@ -1,39 +1,41 @@
 require "delayed_rabbit/version"
+require "delayed_rabbit/configuration"
 require "delayed_rabbit/job_publisher"
-require "delayed_rabbit/railtie" if defined?(Rails)
+require "delayed_rabbit/railtie" if defined?(Rails::Railtie)
 
 module DelayedRabbit
+  PUBLISHER_MUTEX = Mutex.new
+  private_constant :PUBLISHER_MUTEX
+
   class << self
-    attr_accessor :configuration
-  
-    def configure
-      self.configuration ||= Configuration.new
-      yield(configuration) if block_given?
+    attr_writer :configuration
+
+    def configuration
+      @configuration ||= Configuration.new
     end
-  end
 
-  class Configuration
-    attr_accessor :connection_options, :exchange_options, :queue_options
+    def configure
+      yield(configuration) if block_given?
+      configuration
+    end
 
-    def initialize
-      @connection_options = {
-        host: "localhost",
-        port: 5672,
-        user: "guest",
-        password: "guest"
-      }
-      @exchange_options = {
-        type: "x-delayed-message",
-        durable: true,
-        arguments: {"x-delayed-type" => "topic"}
-      }
-      @queue_options = {
-        durable: true,
-        arguments: {
-          "x-dead-letter-exchange" => "delayed_jobs",
-          "x-dead-letter-routing-key" => "delayed_jobs"
-        }
-      }
+    # Publishes through a shared, lazily created publisher so that callers do
+    # not open a new TCP connection per message.
+    def publish(job_data, **options)
+      PUBLISHER_MUTEX.synchronize do
+        @publisher = nil if @publisher && !@publisher.open?
+        @publisher ||= JobPublisher.new
+        @publisher.publish(job_data, **options)
+      end
+    end
+
+    # Closes the shared publisher and restores the default configuration.
+    def reset!
+      PUBLISHER_MUTEX.synchronize do
+        @publisher&.close
+        @publisher = nil
+      end
+      @configuration = nil
     end
   end
 end
